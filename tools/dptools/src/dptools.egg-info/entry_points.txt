@@ -1,0 +1,9 @@
+[console_scripts]
+dp_bands = dptools.scripts.dp_bands:main
+dp_dos = dptools.scripts.dp_dos:main
+gen2cif = dptools.scripts.gen2cif:main
+gen2xyz = dptools.scripts.gen2xyz:main
+makecube = dptools.scripts.makecube:main
+repeatgen = dptools.scripts.repeatgen:main
+straingen = dptools.scripts.straingen:main
+xyz2gen = dptools.scripts.xyz2gen:main

@@ -219,10 +219,6 @@ if(WITH_MBD)
   #list(APPEND PKG_CONFIG_REQUIRES mbd)
 endif()
 
-if(WITH_OPENMMPOL)
-  find_package(openmmpol REQUIRED)
-endif()
-
 if(WITH_TRANSPORT)
   set(LIBNEGF_GIT_REPOSITORY "https://github.com/libnegf/libnegf.git")
   set(LIBNEGF_GIT_TAG "34db682aa7135e4ac98ddd25013bfbf0784d7ed2")  # do not change manually!
@@ -298,6 +294,13 @@ if(WITH_CHIMES)
   dftbp_config_hybrid_dependency(ChimesCalc ChimesCalc::ChimesCalc_Fortran
     "${HYBRID_CONFIG_METHODS}" "QUIET"
   external/chimes "${exclude}" "${CHIMES_GIT_REPOSITORY}" "${CHIMES_GIT_TAG}")
+endif()
+
+if(WITH_OPENMMPOL)
+  find_package(openmmpol REQUIRED)
+  if(openmmpol_FOUND)
+    message(STATUS "openmmpol: Installed package found")
+  endif()
 endif()
 
 # Fortuno currently can only be integrated as a submodule

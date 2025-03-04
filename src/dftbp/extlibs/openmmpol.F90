@@ -214,10 +214,11 @@ contains
 
   end subroutine TOpenmmpolPotGen_writeOutput
 
-#:if not WITH_OPENMMPOL
+! TODO: enable later
+! #:if not WITH_OPENMMPOL
   subroutine notImplementedError
     call error("DFTB+ compiled without support for the openmmpol library")
   end subroutine notImplementedError
-#:endif
+! #:endif
     
 end module dftbp_extlibs_openmmpol

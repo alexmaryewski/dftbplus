@@ -92,6 +92,10 @@ if(WITH_MBD)
   target_link_libraries(dftbplus PUBLIC Mbd::Mbd)
 endif()
 
+if(WITH_OPENMMPOL)
+  target_link_libraries(dftbplus PUBLIC openmmpol::openmmpol)
+endif()
+
 if(WITH_TRANSPORT)
   target_link_libraries(dftbplus PUBLIC Negf::Negf)
 endif()
