@@ -82,6 +82,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_extlibs_poisson, only : TPoissonInput
   use dftbp_extlibs_sdftd3, only : TSDFTD3, TSDFTD3_init, writeSDFTD3Info
   use dftbp_extlibs_tblite, only : TTBLite, TTBLite_init, writeTBLiteInfo
+  use dftbp_extlibs_openmmpol, only: TTOpenmmpol, TOpenmmpolInput, TTOpenmmpol_init
   use dftbp_geoopt_conjgrad, only : TConjGrad
   use dftbp_geoopt_filter, only : TFilter, TFilter_init
   use dftbp_geoopt_fire, only : TFire, TFire_init
@@ -886,6 +887,9 @@ module dftbp_dftbplus_initprogram
 
     !> Plumed calculator
     type(TPlumedCalc), allocatable :: plumedCalc
+
+    !> Openmmpol interface handler
+    type(TTOpenmmpol), allocatable :: openmmpol
 
     !> Dense matrix descriptor for H and S
     type(TDenseDescr), allocatable :: denseDesc
@@ -2309,6 +2313,51 @@ contains
       end if
       this%cutOff%mCutOff = max(this%cutOff%mCutOff, this%dispersion%getRCutOff())
     end if
+
+    if (allocated(input%ctrl%openmmpolInput)) then
+      if (this%tPeriodic) then
+         call error("Periodic boundary conditions are not supported in openmmpol.")
+      end if
+
+      if (allocated(this%multipoleInp%dipoleAtom) .or. &
+          & allocated(this%multipoleInp%quadrupoleAtom)) then
+            call error("Multipolar DFTB / xTB calculations with openmmpol not yet supported.")
+      end if
+
+      if (this%tExtChrg .or. this%isExtField) then
+        call error("External fields are not supported with openmmpol.")
+      end if
+
+      if (allocated(this%reks)) then
+         call error("REKS calculations with openmmpol are not yet supported.")
+      end if
+
+      if (allocated(input%ctrl%elecDynInp)) then
+         call error("Electron dynamics calculations with openmmpol are not supported.")
+      end if
+
+      if (allocated(input%ctrl%lrespini)) then
+         call error("Linear response calculations with openmmpol are not yet supported.")
+      end if
+
+      if (allocated(input%ctrl%solvInp)) then
+        call error("Implicit solvent models are not compatible with openmmpol.")
+      end if
+
+      if (input%ctrl%tPlumed) then
+         call error("PLUMED calculations with openmmpol are not supported.")
+      end if
+
+    #:if WITH_TRANSPORT
+      if (input%transpar%defined) then
+        call error("Transport calculations with openmmpol are not supported.")
+      end if
+    #:endif
+
+      allocate(this%openmmpol)
+      call TTOpenmmpol_init(this%openmmpol, input%ctrl%openmmpolInput, this%nAtom, & 
+          & this%species0, this%speciesName, this%coord0)
+   end if
 
     this%areSolventNeighboursSym = .false.
     if (allocated(input%ctrl%solvInp)) then
