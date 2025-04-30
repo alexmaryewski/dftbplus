@@ -12,6 +12,7 @@
 module dftbp_solvation_solvinput
   use dftbp_common_accuracy, only : dp
   use dftbp_common_status, only : TStatus
+  use dftbp_extlibs_openmmpol, only : TOpenmmpol, TOpenmmpolInput, TOpenmmpol_init
   use dftbp_io_message, only : error
   use dftbp_solvation_born, only : TGeneralizedBorn, TGBInput, TGeneralizedBorn_init, &
     writeGeneralizedBornInfo
@@ -44,6 +45,7 @@ module dftbp_solvation_solvinput
     module procedure :: createGeneralizedBornModel
     module procedure :: createCosmoModel
     module procedure :: createSASAModel
+    module procedure :: createOpenmmpolModel
   end interface
 
 
@@ -77,6 +79,9 @@ contains
       write(unit, '(a)') "surface area model"
       call writeSASAContInfo(unit, solvation)
 
+    type is(TOpenmmpol)
+      write(unit, '(a)') "Openmmpol QM/MM model"
+      
     class default
       write(unit, '(a)') "internal error"
       call error("Unknown solvation model passed")
@@ -193,6 +198,46 @@ contains
     call move_alloc(model, solvation)
 
   end subroutine createSASAModel
+
+
+  !> Wrapper to create a generalized Born model
+  subroutine createOpenmmpolModel(solvation, input, nAtom, species0, speciesNames, errStatus, &
+      & coords, latVecs)
+
+    !> Generic solvation model
+    class(TSolvation), allocatable, intent(out) :: solvation
+
+    !> Input to setup the solvation model
+    type(TOpenmmpolInput), intent(in) :: input
+
+    !> Nr. of atoms in the system
+    integer, intent(in) :: nAtom
+
+    !> Species of every atom in the unit cell
+    integer, intent(in) :: species0(:)
+
+    !> Symbols of the species
+    character(len=*), intent(in) :: speciesNames(:)
+
+    !> Error status
+    type(TStatus), intent(out) :: errStatus
+
+    !> Initial atomic coordinates
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Lattice vectors, if the system is periodic
+    real(dp), intent(in), optional :: latVecs(:,:)
+
+    type(TOpenmmpol), allocatable :: model
+
+    allocate(model)
+
+    call TOpenmmpol_init(model, input, nAtom, species0, speciesNames, errStatus, coords, latVecs)
+    @:PROPAGATE_ERROR(errStatus)
+
+    call move_alloc(model, solvation)
+
+  end subroutine createOpenmmpolModel
 
 
 end module dftbp_solvation_solvinput

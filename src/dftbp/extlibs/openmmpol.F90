@@ -10,16 +10,22 @@
 !> Proxy module for interfacing with the openmmpol library.
 module dftbp_extlibs_openmmpol
     use dftbp_common_accuracy, only : dp, mc
-    use dftbp_dftbplus_qdepextpotgen, only : TQDepExtPotGen
+    use dftbp_common_environment, only : TEnvironment
+    use dftbp_common_status, only : TStatus
+    use dftbp_dftb_charges, only : getSummedCharges
+    use dftbp_dftb_periodic, only : TNeighbourList
     use dftbp_io_message, only : error, warning
+    use dftbp_math_simplealgebra, only : determinant33
+    use dftbp_solvation_solvation, only : TSolvation
+    use dftbp_type_commontypes, only : TOrbitals
   #:if WITH_OPENMMPOL
     use ommp_interface, only : ommp_system, ommp_init_mmp, ommp_init_xyz, ommp_terminate,&
     ommp_print_summary, ommp_prepare_qm_ele_ene, ommp_set_external_field,&
     ommp_potential_mmpol2ext, ommp_qm_helper, ommp_init_qm_helper, ommp_terminate_qm_helper,&
-    ommp_set_verbose, ommp_get_full_ele_energy, ommp_get_fixedelec_energy,&
-    ommp_get_polelec_energy, ommp_get_full_bnd_energy, ommp_get_vdw_energy,&
-    ommp_qm_helper_init_vdw_prm, ommp_qm_helper_vdw_energy, ommp_qm_helper_set_attype,&
-    ommp_qm_helper_vdw_energy, ommp_print_summary_to_file, ommp_ignore_duplicated_angle_prm,&
+    ommp_set_verbose, ommp_get_fixedelec_energy, ommp_get_polelec_energy,&
+    ommp_get_full_bnd_energy, ommp_get_vdw_energy, ommp_qm_helper_init_vdw_prm,&
+    ommp_qm_helper_vdw_energy, ommp_qm_helper_set_attype, ommp_qm_helper_vdw_energy,&
+    ommp_print_summary_to_file, ommp_ignore_duplicated_angle_prm,&
     ommp_ignore_duplicated_opb_prm, OMMP_SOLVER_NONE, OMMP_FF_AMOEBA, OMMP_FF_WANG_AL,&
     OMMP_FF_WANG_DL, OMMP_VERBOSE_DEBUG, OMMP_VERBOSE_LOW, OMMP_VERBOSE_HIGH
   #:endif
@@ -27,15 +33,41 @@ module dftbp_extlibs_openmmpol
     implicit none
     
     private
-    public TTOpenmmpol, TOpenmmpolInput, TTOpenmmpol_init
-
+    public TOpenmmpol, TOpenmmpolInput, TOpenmmpol_init, TOpenmmpol_final
+    public writeOpenmmpolInfo
 
     ! Constant for AMBER identification inside openmmpol
     integer, protected :: OMMP_FF_AMBER = 0
   
-
     !> Library interface handler
-    type :: TTOpenmmpol
+    type, extends(TSolvation) :: TOpenmmpol
+      !> number of atoms
+      integer :: nAtom = 0
+
+      !> solvation free energy
+      real(dp), allocatable :: energies(:)
+
+      !> lattice vectors if periodic
+      real(dp) :: latVecs(3, 3) = 0.0_dp
+
+      !> Volume of the unit cell
+      real(dp) :: volume = 0.0_dp
+
+      !> stress tensor
+      real(dp) :: stress(3, 3) = 0.0_dp
+
+      !> is this periodic
+      logical :: tPeriodic
+
+      !> are the coordinates current?
+      logical :: tCoordsUpdated = .false.
+
+      !> are the charges current?
+      logical :: tChargesUpdated = .false.
+
+      !> QM/MM interaction cutoff
+      integer :: rCutoff = 0.0_dp
+
     #:if WITH_OPENMMPOL
       !> Pointer to openmmpol system object
       type(ommp_system), pointer :: pSystem
@@ -47,8 +79,19 @@ module dftbp_extlibs_openmmpol
       !> Site-resolved potential
       real(dp), allocatable :: potential(:)
 
-      !> Site-resolved potential due to the Lagrangian (if present)
-      real(dp), allocatable :: potentialLagrangian(:)
+      !> QM/MM electrostatic energy from constant multipoles
+      !! (site-resolved)
+      real(dp), allocatable :: energyQmElecStat(:)
+
+      !> QM/MM electrostatic energy from polarizable multipoles
+      !! (site-resolved)
+      real(dp), allocatable :: energyQmElecPol(:)
+
+      !> MM/MM electrostatic energy from constant multipoles
+      real(dp) :: energyMmElecStat
+
+      !> MM/MM electrostatic energy from polarizable multipoles
+      real(dp) :: energyMmElecPol
 
       !> Total energy of all bonding terms in the force field
       real(dp) :: energyBonded
@@ -59,20 +102,44 @@ module dftbp_extlibs_openmmpol
       !> Linear solver
       integer :: solver
       
-      contains
-        procedure :: getPotential => TTOpenmmpol_getPotential
-        procedure :: getPotentialLagrangian => TTOpenmmpol_getPotentialLagrangian
-        procedure :: getPotentialGradient => TTOpenmmpol_getPotentialGradient
-        procedure :: getPotentialGradientLagrangian => TTOpenmmpol_getPotentialGradientLagrangian
-        procedure :: getInternalEnergy => TTOpenmmpol_getInternalEnergy
-        procedure :: writeOutput => TTOpenmmpol_writeOutput
-        procedure :: updateCharges => TTOpenmmpol_updateCharges
-        procedure :: updateCoords => TTOpenmmpol_updateCoords
+    contains
+    
+      !> update internal copy of coordinates
+      procedure :: updateCoords
+
+      !> update internal copy of lattice vectors
+      procedure :: updateLatVecs
+      
+      !> get real space cutoff
+      procedure :: getRCutoff
+
+      !> get energy contributions
+      procedure :: getEnergies
+
+      !> get force contributions
+      procedure :: addGradients
+
+      !> get stress tensor contributions
+      procedure :: getStress
+
+      !> Updates with changed charges for the instance.
+      procedure :: updateCharges
+
+      !> Returns shifts per atom
+      procedure :: getShifts
+
+      !> Is the electrostic field modified by this solvent model?
+      procedure :: isEFieldModified
+
+      !> Relative dielectric constant for solvent
+      procedure :: getEpsilon_r
+
     end type
 
 
     !> Data type for storing openmmpol-specific input parameters
     type :: TOpenmmpolInput
+
       !> Used input format (either "Tinker" or "mmp")
       character(:), allocatable :: inputFormat
 
@@ -91,17 +158,19 @@ module dftbp_extlibs_openmmpol
       !> Path to parameter file containing MM atom
       !! types for atoms in the QM zone
       character(:), allocatable :: qmParamsFilename
+
     end type
 
 contains
   
-  subroutine TTOpenmmpol_init(this, input, nAtom, species0, speciesNames, coords0)
+  !> Initialize an openmmpol object
+  subroutine TOpenmmpol_init(this, input, nAtom, species0, speciesNames, errStatus, coords, latVecs)
 
-    !> Instance of the library interface
-    class(TTOpenmmpol), intent(out) :: this
+    !> Initialised instance at return
+    type(TOpenmmpol), intent(out) :: this
 
-    !> Input to construct the library interface from
-    type(TOpenmmpolInput), intent(in) ::  input
+    !> Specific input parameters for openmmpol
+    type(TOpenmmpolInput), intent(in) :: input
 
     !> Nr. of atoms in the system
     integer, intent(in) :: nAtom
@@ -109,171 +178,416 @@ contains
     !> Species of every atom in the unit cell
     integer, intent(in) :: species0(:)
 
-    !> Atomic coordinates in the unit cell
-    real(dp), intent(in) :: coords0(:,:)
-
     !> Symbols of the species
     character(len=*), intent(in) :: speciesNames(:)
 
-    real(dp), allocatable, dimension(:) :: charges
-    integer, allocatable :: Zvector(:)
+    !> Error status
+    type(TStatus), intent(out) :: errStatus
+
+    !> Initial atomic coordinates
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Lattice vectors, if the system is periodic
+    real(dp), intent(in), optional :: latVecs(:,:)
+
+    real(dp), allocatable, dimension(:) :: initCharges
+    integer, allocatable :: zVector(:)
 
   #:if WITH_OPENMMPOL
+    this%nAtom = nAtom
     this%solver = input%solver
+
     this%energyBonded = 0.0_dp
     this%energyNonbonded = 0.0_dp
-    allocate(this%potential(nAtom), source=0.0_dp)
 
-    ! Tinker compatibility by default
+    allocate(this%potential(nAtom), source=0.0_dp)
+    allocate(this%energyQmElecStat(nAtom), source=0.0_dp)
+    allocate(this%energyQmElecPol(nAtom), source=0.0_dp)
+
+    ! Tinker compatibility is enforced by default
     call ommp_ignore_duplicated_opb_prm()
     call ommp_ignore_duplicated_angle_prm()
 
+    ! Initialize from input
     select case (input%inputFormat)
     case ("tinker")
       call ommp_init_xyz(this%pSystem, input%mmGeomFilename, input%mmParamsFilename)
     case ("mmp")
       call ommp_init_mmp(this%pSystem, input%mmParamsFilename)
     case default
-      call error("Bad openmmpol input format supplied to initializer!")
+      call error("Openmmpol is unable to recognize the input file format.")
     end select
 
-    allocate(charges(nAtom), source=0.0_dp)
-    allocate(Zvector(nAtom))
-    call getNuclChargeVector(Zvector, speciesNames, species0)
-    call ommp_init_qm_helper(this%pQmHelper, nAtom, coords0, charges, Zvector)
+    ! Initialize the qmhelper object with nuclear charges
+    allocate(initCharges(nAtom), source=0.0_dp)
+    allocate(zVector(nAtom))
+
+    ! Openmmpol requires nuclear charges for initialization
+    call getNuclChargeVector(zVector, speciesNames, species0)
+    call ommp_init_qm_helper(this%pQmHelper, nAtom, coords, initCharges, zVector)
     call ommp_qm_helper_set_attype(this%pQMHelper, input%qmAtomTypes)
     call ommp_qm_helper_init_vdw_prm(this%pQMHelper, input%qmParamsFilename)
 
     if (this%pSystem%amoeba) then
-      allocate(this%potentialLagrangian(nAtom), source=0.0_dp)
       this%pQMHelper%V_pp2n_req = .true.
     end if
     
+    ! Evaluate bonded and non-bonded energy terms for the initial geometry
     this%energyBonded = ommp_get_full_bnd_energy(this%pSystem)
     this%energyNonbonded = ommp_get_vdw_energy(this%pSystem) + &
         & ommp_qm_helper_vdw_energy(this%pQMHelper, this%pSystem)
 
+    ! Verbosity control
+    ! TODO: initialize from input?
     call ommp_set_verbose(OMMP_VERBOSE_DEBUG)
     ! call ommp_set_verbose(OMMP_VERBOSE_LOW)
 
-    deallocate(charges)
-    deallocate(Zvector)
+    deallocate(initCharges)
+    deallocate(zVector)
 
+    this%tCoordsUpdated = .false.
+    this%tChargesUpdated = .false.
+
+    ! TODO: remove debug lines
     call error("DEBUG: stopping")
   #:else
     call notImplementedError
   #:endif
-  end subroutine TTOpenmmpol_init
+  
+  end subroutine TOpenmmpol_init
+
+
+  !> Terminate an openmmpol instance
+  subroutine TOpenmmpol_final(this)
+
+    !> Instance.
+    class(TOpenmmpol), intent(inout) :: this
+
+  #:if WITH_OPENMMPOL
+    call ommp_terminate_qm_helper(this%pQmHelper)
+    call ommp_terminate(this%pSystem)
+    deallocate(this%potential)
+    deallocate(this%energyQmElecStat)
+    deallocate(this%energyQmElecPol)
+  #:else
+    call notImplementedError
+  #:endif
+
+  end subroutine TOpenmmpol_final
+
+
+  !> Returns shifts per atom
+  subroutine getShifts(this, shiftPerAtom, shiftPerShell)
+
+    !> Instance.
+    class(TOpenmmpol), intent(inout) :: this
+
+    !> Shift per atom
+    real(dp), intent(out) :: shiftPerAtom(:)
+
+    !> Shift per shell
+    real(dp), intent(out) :: shiftPerShell(:,:)
+
+    shiftPerAtom(:) = 0.0_dp
+    shiftPerShell(:,:) = 0.0_dp
+
+    shiftPerAtom(:) = shiftPerAtom + this%potential     
+
+  end subroutine getShifts
+
+
+  !> Get energy contributions
+  subroutine getEnergies(this, energies)
+
+    !> Instance.
+    class(TOpenmmpol), intent(inout) :: this
+
+    !> energy contributions for each atom
+    real(dp), intent(out) :: energies(:)
+
+    ! @:ASSERT(this%tCoordsUpdated)
+    ! @:ASSERT(this%tChargesUpdated)
+    ! @:ASSERT(size(energies) == this%nAtom)
+
+    ! if (allocated(this%sasaCont)) then
+      ! call this%sasaCont%getEnergies(energies)
+    ! else
+      ! energies(:) = 0.0_dp
+    ! end if
+
+    ! energies(:) = energies + 0.5_dp * (this%shift * this%chargesPerAtom) &
+      !  & + this%param%freeEnergyShift / real(this%nAtom, dp)
+
+  end subroutine getEnergies
+
+
+  !> Get force contributions
+  subroutine addGradients(this, env, neighList, species, coords, img2CentCell, gradients, errStatus)
+
+    !> Data structure
+    class(TOpenmmpol), intent(inout) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Neighbour list.
+    type(TNeighbourList), intent(in) :: neighList
+
+    !> Specie for each atom.
+    integer, intent(in) :: species(:)
+
+    !> Coordinate of each atom.
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Mapping of atoms to cetnral cell.
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Gradient contributions for each atom
+    real(dp), intent(inout) :: gradients(:,:)
+
+    !> Error status
+    type(TStatus), intent(out) :: errStatus
+
+    integer :: ii, iat, ig
+    real(dp), allocatable :: fx(:,:), zeta(:), ef1(:,:), ef2(:,:)
+
+  #:if WITH_OPENMMPOL
+    call notImplementedError
+  #:else
+    call notImplementedError
+  #:endif
+
+  end subroutine addGradients
+
+
+  subroutine getStress(this, stress)
+
+    !> Class instance.
+    class(TOpenmmpol), intent(inout) :: this
+
+    !> Stress tensor contributions
+    real(dp), intent(out) :: stress(:,:)
+
+  #:if WITH_OPENMMPOL
+    call notImplementedError
+  #:else
+    call notImplementedError
+  #:endif
+
+  end subroutine getStress
+
+
+  !> Updates with changed charges for the instance.
+  subroutine updateCharges(this, env, species, neighList, qq, q0, img2CentCell, orb, errStatus)
+
+    !> Instance.
+    class(TOpenmmpol), intent(inout) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Species, shape: [nAtom]
+    integer, intent(in) :: species(:)
+
+    !> Neighbour list.
+    type(TNeighbourList), intent(in) :: neighList
+
+    !> Orbital charges.
+    real(dp), intent(in) :: qq(:,:,:)
+
+    !> Reference orbital charges.
+    real(dp), intent(in) :: q0(:,:,:)
+
+    !> Mapping on atoms in central cell.
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> Error status
+    type(TStatus), intent(out) :: errStatus
+
+  #:if WITH_OPENMMPOL
+    ! DFTB+ internally uses charges and potential that are opposite to the chemical
+    ! convention, therefore we need a sign inversion when passing them to openmmpol
+    call getSummedCharges(species, orb, qq, q0=q0, dQatom=this%pQMHelper%qqm)
+    this%pQMHelper%qqm = -this%pQMHelper%qqm
+
+    ! Compute electric field produced by QM part of the system on MM atoms
+    this%pQMHelper%E_n2p_done = .false.
+
+    ! Only computes E_n2p (and V_m2n/V_p2n at first call)
+    call ommp_prepare_qm_ele_ene(this%pSystem, this%pQMHelper)
+
+    if (this%pSystem%ff_type .ne. OMMP_FF_AMBER) then
+
+      ! Set external field for MM, solve the polarization equations
+      this%pSystem%eel%D2Mgg_done = .false.
+      this%pSystem%eel%D2Dgg_done = .false.
+
+      call ommp_set_external_field(this%pSystem, &
+         this%pQMHelper%E_n2p, &
+         this%solver, &
+         OMMP_SOLVER_NONE, &
+         .true.)
+
+      ! Set flags for computing the MM-to-QM potential for IPDs
+      this%pQMHelper%V_p2n_done = .false.
+      if (this%pSystem%amoeba) then
+         this%pQMHelper%V_pp2n_done = .false.
+      end if
+
+      ! Only computes V_p2n, after having updated the external field/IPDs
+      call ommp_prepare_qm_ele_ene(this%pSystem, this%pQMHelper)
+
+      ! Compute and store shifts
+      if (this%pSystem%amoeba) then
+        this%potential = -((this%pQMHelper%V_pp2n + this%pQMHelper%V_p2n) * 0.5_dp + &
+            & this%pQMHelper%V_m2n)
+      else
+        this%potential = -(this%pQMHelper%V_p2n + this%pQMHelper%V_m2n)
+      end if
+
+    end if
+
+    ! Compute and store electrostatic energies;
+    ! QM/MM energies are site-resolved
+    this%energyQmElecStat(:) = this%pQMHelper%V_m2n * this%pQMHelper%qqm
+    this%energyMmElecStat = ommp_get_fixedelec_energy(this%pSystem)
+    this%energyQmElecPol(:) = 0.5_dp * this%pQMHelper%V_p2n * this%pQMHelper%qqm
+    this%energyMmElecPol = ommp_get_polelec_energy(this%pSystem)
+
+    this%tChargesUpdated = .true.
+  #:else
+    call notImplementedError
+  #:endif
+
+  end subroutine updateCharges
+
+
+  !> Update internal stored coordinates
+  subroutine updateCoords(this, env, neighList, img2CentCell, coords, species0)
+
+    !> Data structure
+    class(TOpenmmpol), intent(inout) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> List of neighbours to atoms
+    type(TNeighbourList), intent(in) :: neighList
+
+    !> Image to central cell atom index
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Atomic coordinates
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Central cell chemical species
+    integer, intent(in) :: species0(:)
+
+    integer, allocatable :: nNeigh(:)
+
+  #:if WITH_OPENMMPOL
+    call notImplementedError
+    
+    !> TODO: do not forget to update the MM coordinates as well
+    ! Evaluate bonded and non-bonded energy terms for the initial geometry
+    this%energyBonded = ommp_get_full_bnd_energy(this%pSystem)
+    this%energyNonbonded = ommp_get_vdw_energy(this%pSystem) + &
+        & ommp_qm_helper_vdw_energy(this%pQMHelper, this%pSystem)
+
+  #:else
+    call notImplementedError
+  #:endif
+
+  end subroutine updateCoords
+
+
+  !> Update internal copy of lattice vectors
+  subroutine updateLatVecs(this, latVecs)
+
+    !> Data structure
+    class(TOpenmmpol), intent(inout) :: this
+
+    !> Lattice vectors
+    real(dp), intent(in) :: latVecs(:,:)
+
+    @:ASSERT(this%tPeriodic)
+    @:ASSERT(all(shape(latvecs) == shape(this%latvecs)))
+
+    this%volume = abs(determinant33(latVecs))
+    this%latVecs(:,:) = latVecs
+
+    this%tCoordsUpdated = .false.
+    this%tChargesUpdated = .false.
+
+  end subroutine updateLatVecs
+
+
+  !> Print Openmmpol settings to external file
+  subroutine writeOpenmmpolInfo(unit, solvation)
+
+    !> Unit for IO
+    integer, intent(in) :: unit
+
+    !> Instance.
+    type(TOpenmmpol), intent(in) :: solvation
+
+  #:if WITH_OPENMMPOL
+    !> TODO: throw in some info for good measure
+    ! call ommp_print_summary_to_file(solvation%pSystem, unit)
+  #:else
+    call notImplementedError
+  #:endif
+
+  end subroutine writeOpenmmpolInfo
   
 
-  subroutine TTOpenmmpol_getPotential(this)
+  !> Is the electrostic field modified by this solvent model?
+  pure function isEFieldModified(this) result(isChanged)
+
+    !> Data instance
+    class(TOpenmmpol), intent(in) :: this
+
+    !> Has the solvent model changed the electrostatic environment
+    logical :: isChanged
+
+    isChanged = .true.
+
+  end function isEFieldModified
+
+
+  !> Returns solvent region relative dielectric constant
+  pure function getEpsilon_r(this) result(e_r)
+
+    !> Data structure
+    class(TOpenmmpol), intent(in) :: this
+
+    !> epsilon_r
+    real(dp) :: e_r
+
+    e_r = 1.0_dp
+
+  end function getEpsilon_r
+
+
+  !> Distance cut off for QM/MM interaction
+  function getRCutoff(this) result(cutoff)
+
     !> Instance.
-    class(TTOpenmmpol), intent(inout) :: this
+    class(TOpenmmpol), intent(inout) :: this
 
-  #:if WITH_OPENMMPOL
-    call notImplementedError
-  #:else
-    call notImplementedError
-  #:endif
+    !> Resulting cutoff
+    real(dp) :: cutoff
 
-  end subroutine TTOpenmmpol_getPotential
+    cutoff = this%rCutoff
 
-
-  subroutine TTOpenmmpol_getPotentialGradient(this)
-    !> Class instance.
-    class(TTOpenmmpol), intent(inout) :: this
-
-  #:if WITH_OPENMMPOL
-    call notImplementedError
-  #:else
-    call notImplementedError
-  #:endif
-
-  end subroutine TTOpenmmpol_getPotentialGradient
-
-
-  subroutine TTOpenmmpol_getPotentialLagrangian(this)
-    !> Instance.
-    class(TTOpenmmpol), intent(inout) :: this
-
-
-  #:if WITH_OPENMMPOL
-    call notImplementedError
-  #:else
-    call notImplementedError
-  #:endif
-
-  end subroutine TTOpenmmpol_getPotentialLagrangian
-
-
-  subroutine TTOpenmmpol_getPotentialGradientLagrangian(this)
-    !> Instance.
-    class(TTOpenmmpol), intent(inout) :: this
-
-  #:if WITH_OPENMMPOL
-    call notImplementedError
-  #:else
-    call notImplementedError
-  #:endif
-
-  end subroutine TTOpenmmpol_getPotentialGradientLagrangian
-
-
-  subroutine TTOpenmmpol_getInternalEnergy(this, output)
-    !> Class instance.
-    class(TTOpenmmpol), intent(inout) :: this
-
-    !> External energy contribution
-    real(dp), intent(out) :: output
-
-  #:if WITH_OPENMMPOL
-    output = this%energyBonded
-  #:else
-    call notImplementedError
-  #:endif
-
-  end subroutine TTOpenmmpol_getInternalEnergy
-
-
-  subroutine TTOpenmmpol_updateCharges(this)
-    !> Class instance.
-    class(TTOpenmmpol), intent(inout) :: this
-
-  #:if WITH_OPENMMPOL
-    call notImplementedError
-  #:else
-    call notImplementedError
-  #:endif
-
-  end subroutine TTOpenmmpol_updateCharges
-
-
-  subroutine TTOpenmmpol_updateCoords(this)
-    !> Class instance.
-    class(TTOpenmmpol), intent(inout) :: this
-
-  #:if WITH_OPENMMPOL
-    call notImplementedError
-  #:else
-    call notImplementedError
-  #:endif
-
-  end subroutine TTOpenmmpol_updateCoords
-
-
-  subroutine TTOpenmmpol_writeOutput(this)
-    class(TTOpenmmpol) :: this
-
-  #:if WITH_OPENMMPOL
-    call ommp_print_summary_to_file(this%pSystem, "openmmpol.out")
-  #:else
-    call notImplementedError
-  #:endif
-
-  end subroutine TTOpenmmpol_writeOutput
+  end function getRCutoff
 
 
   subroutine getNuclChargeVector(Zvector, speciesNames, species)
+
     !> Nuclear charge vector
     integer, intent(out) :: Zvector(:)
 
@@ -472,7 +786,7 @@ contains
 
  end subroutine getNuclChargeVector
 
-! TODO: enable conditional compilation later
+
 ! #:if not WITH_OPENMMPOL
   subroutine notImplementedError
     call error("DFTB+ compiled without support for the openmmpol library")

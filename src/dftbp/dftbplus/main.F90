@@ -83,6 +83,7 @@ module dftbp_dftbplus_main
   use dftbp_elecsolvers_elecsolvers, only : TElectronicSolver
   use dftbp_elecsolvers_elecsolvertypes, only : electronicSolverTypes
   use dftbp_extlibs_plumed, only : TPlumedCalc, TPlumedCalc_final
+  use dftbp_extlibs_openmmpol, only : TOpenmmpol, TOpenmmpol_final
   use dftbp_extlibs_tblite, only : TTBLite
   use dftbp_geoopt_geoopt, only : TGeoOpt, next, reset
   use dftbp_io_message, only : error, warning
