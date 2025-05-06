@@ -19,6 +19,7 @@ module dftbp_solvation_solvparser
       & massDensityUnits, inverseLengthUnits
   use dftbp_dftbplus_specieslist, only : readSpeciesList
   use dftbp_extlibs_lebedev, only : gridSize
+  use dftbp_extlibs_openmmpol, only : TOpenmmpolInput
   use dftbp_extlibs_xmlf90, only : fnode, string, char, getNodeName
   use dftbp_io_charmanip, only : tolower, unquote
   use dftbp_io_hsdutils, only : getChild, getChildValue, setChild, detailedError, &
@@ -79,6 +80,9 @@ contains
     case ("sasa")
       allocate(input%SASAInp)
       call readSolvSASA(solvModel, geo, input%SASAInp)
+    case ("openmmpol")
+      allocate(input%openmmpolInput)
+      call readOpenmmpol(solvModel, geo, input%openmmpolInput)
     end select
   end subroutine readSolvation
 
@@ -412,6 +416,80 @@ contains
     call convertUnitHsd(char(modifier), lengthUnits, field, input%sOffset)
 
   end subroutine readSolvSASA
+
+
+  !> Read input data for Openmmpol
+  subroutine readOpenmmpol(node, geo, openmmpolInput)
+
+    !> Node to process
+    type(fnode), pointer :: node
+
+    !> Geometry of the current system
+    type(TGeometry), intent(in) :: geo
+
+    !> Contains the input for the solvation module on exit
+    type(TOpenmmpolInput), intent(out) :: openmmpolInput
+
+    type(fnode), pointer :: vdwChild
+    type(string) :: buffer
+    type(string), allocatable :: searchPath(:)
+    character(:), allocatable :: inputFilename
+    integer :: openmmpolSolver
+
+    if (geo%tPeriodic .or. geo%tHelical) then
+      call detailedError(node, "Openmmpol QM/MM currently not available with the&
+         & selected boundary conditions")
+    end if
+
+    ! Get search path for files
+    call getParamSearchPaths(searchPath)
+
+    call getChildValue(node, "Format", buffer)
+    openmmpolInput%inputFormat = tolower(unquote(char(buffer)))
+
+    ! Get file with FF parameters
+    call getChildValue(node, "ParamFile", buffer)
+    inputFilename = unquote(char(buffer))
+    call findFile(searchPath, inputFilename, openmmpolInput%ParamFile)
+    if (.not. allocated(openmmpolInput%ParamFile)) then
+      ! call detailedError(child, "Unknown method '"//char(buffer)//"' to generate surface tension")
+      call detailedError(node, "Could not find openmmpol force field parameters input file (Tinker format): '"//inputFileName//"'")
+    end if
+
+    ! Input format specific logic
+    select case (openmmpolInput%inputFormat)
+    case default
+      call detailedError(node, "Input file format for openmmpol is not recognized")
+    case ("mmp")
+    case ("tinker")
+      ! Get file with MM geometry
+      call getChildValue(node, "ParamFileGeo", buffer)
+      inputFilename = unquote(char(buffer))
+      call findFile(searchPath, inputFilename, openmmpolInput%ParamFileGeo)
+      if (.not. allocated(openmmpolInput%ParamFileGeo)) then
+        call detailedError(node, "Could not find openmmpol geometry input file (Tinker format): '"//inputFileName//"'")
+      end if
+    end select
+
+    ! Get solver for polarization equations, default is "3" (numerically exact)
+    call getChildValue(node, "solver", openmmpolSolver, default=3)
+    openmmpolInput%solver = openmmpolSolver
+
+    ! Get QM atom types (needed for QM/MM vdW interactions)
+    call getChild(node, "vdw", vdwChild, requested=.true.)
+    allocate(openmmpolInput%qmAtomTypes(geo%nAtom))
+    call getChildValue(vdwChild, "AtomTypes", openmmpolInput%qmAtomTypes)
+    call getChildValue(vdwChild, "ParametersFilename", buffer)
+    inputFilename = unquote(char(buffer))
+    call findFile(searchPath, inputFilename, openmmpolInput%ParamFileQm)
+    if (.not. allocated(openmmpolInput%ParamFileQm)) then
+       call detailedError(node, "Could not find openmmpol force field parameters input file (Tinker format): '"//inputFileName//"'")
+    end if
+
+    !> Copy intial QM geometries
+    allocate(openmmpolInput%coords, source=geo%coords)
+
+  end subroutine readOpenmmpol
 
 
   !> Read settings for charge model 5.

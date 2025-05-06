@@ -1437,8 +1437,6 @@ contains
 
     call parseChimes(node, ctrl%chimesRepInput)
 
-    call parseOpenmmpol(node, ctrl%openmmpolInput, geo%nAtom)
-
     call parseHybridBlock(node, ctrl%hybridXcInp, ctrl, geo, skFiles)
 
     if (allocated(ctrl%hybridXcInp)) then
@@ -8319,79 +8317,6 @@ contains
     #:endif
 
   end subroutine parseChimes
-
-
-  !> Parses Openmmpol options
-  subroutine parseOpenmmpol(rootNode, openmmpolInput, nAtom)
-    use dftbp_extlibs_openmmpol, only : TOpenmmpolInput
-
-    type(fnode), pointer, intent(in) :: rootNode
-    type(TOpenmmpolInput), allocatable, intent(out) :: openmmpolInput
-    integer, intent(in) :: nAtom
-
-    type(fnode), pointer :: inputNode, vdwChild
-    type(string) :: buffer
-    type(string), allocatable :: searchPath(:)
-    character(:), allocatable :: inputFilename
-    integer :: openmmpSolver
-
-    call getChild(rootNode, "openmmpol", inputNode, requested=.false.)
-    if (.not. associated(inputNode)) return
-    #:if WITH_OPENMMPOL
-      allocate(openmmpolInput)
-      call getChildValue(rootNode, "openmmpol", inputNode)
-      call getNodeName(inputNode, buffer)
-      openmmpolInput%inputFormat = unquote(char(buffer))
-
-      ! Get search path for files
-      call getParamSearchPaths(searchPath)
-
-      ! Tinker input format: .xyz file + .key/.prm file
-      write(*, *) openmmpolInput%inputFormat
-      if (openmmpolInput%inputFormat == "tinker") then
-        ! Get geometry
-        call getChildValue(inputNode, "GeometryFilename", buffer)
-        inputFilename = unquote(char(buffer))
-        call findFile(searchPath, inputFilename, openmmpolInput%mmGeomFilename)
-        if (.not. allocated(openmmpolInput%mmGeomFilename)) then
-          call error("Could not find openmmpol geometry input file (Tinker format): '" // inputFileName // "'")
-        end if
-        ! Get force field parameters
-        call getChildValue(inputNode, "ParametersFilename", buffer)
-        inputFilename = unquote(char(buffer))
-        call findFile(searchPath, inputFilename, openmmpolInput%mmParamsFilename)
-        if (.not. allocated(openmmpolInput%mmParamsFilename)) then
-          call error("Could not find openmmpol force field parameters input file (Tinker format): '" // inputFileName // "'")
-        end if
-      ! mmp input format: single .mmp file
-      else if (openmmpolInput%inputFormat == "mmp") then
-        call getChildValue(inputNode, "ParametersFilename", buffer)
-        inputFilename = unquote(char(buffer))
-        call findFile(searchPath, inputFilename, openmmpolInput%mmParamsFilename)
-        if (.not. allocated(openmmpolInput%mmParamsFilename)) then
-          call error("Could not find openmmpol force field parameters input file (Tinker format): '" // inputFileName // "'")
-        end if
-      else
-        call error("Input file format for openmmpol is not recognized")
-      end if
-      ! Assign solver, set to default if not provided
-      call getChildValue(inputNode, "solver", openmmpSolver, default=3)
-      openmmpolInput%solver = openmmpSolver
-
-      ! Read vdW atom types
-      call getChild(inputNode, "vdw", vdwChild, requested=.true.)
-      allocate(openmmpolInput%qmAtomTypes(nAtom))
-      call getChildValue(vdwChild, "AtomTypes", openmmpolInput%qmAtomTypes)
-      call getChildValue(vdwChild, "ParametersFilename", buffer)
-      inputFilename = unquote(char(buffer))
-      call findFile(searchPath, inputFilename, openmmpolInput%qmParamsFilename)
-      if (.not. allocated(openmmpolInput%qmParamsFilename)) then
-         call error("Could not find openmmpol force field parameters input file (Tinker format): '" // inputFileName // "'")
-      end if
-    #:else
-      call detailedError(inputNode, "openmmpol calculation requested, but DFTB+ was not compiled with openmmpol support.")
-    #:endif
-  end subroutine parseOpenmmpol
 
 
   !> Returns parser version for a given input version or throws an error if not possible.

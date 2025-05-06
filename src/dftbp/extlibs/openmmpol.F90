@@ -144,18 +144,21 @@ module dftbp_extlibs_openmmpol
       !> Index of linear solver
       integer :: solver
 
+      !> coordinates of QM atoms
+      real(dp), allocatable :: coords(:,:)
+
       !> Path to MM geometry file
-      character(:), allocatable :: mmGeomFilename
+      character(:), allocatable :: ParamFileGeo
 
       !> Path to a separate parameter file, if present
-      character(:), allocatable :: mmParamsFilename
+      character(:), allocatable :: ParamFile
 
       !> MM atom types for atoms in the QM zone
       integer, allocatable :: qmAtomTypes(:)
 
       !> Path to parameter file containing MM atom
       !! types for atoms in the QM zone
-      character(:), allocatable :: qmParamsFilename
+      character(:), allocatable :: ParamFileQm
 
     end type
 
@@ -211,9 +214,9 @@ contains
     ! Initialize from input
     select case (input%inputFormat)
     case ("tinker")
-      call ommp_init_xyz(this%pSystem, input%mmGeomFilename, input%mmParamsFilename)
+      call ommp_init_xyz(this%pSystem, input%ParamFileGeo, input%ParamFile)
     case ("mmp")
-      call ommp_init_mmp(this%pSystem, input%mmParamsFilename)
+      call ommp_init_mmp(this%pSystem, input%ParamFile)
     case default
       call error("Openmmpol is unable to recognize the input file format.")
     end select
@@ -224,9 +227,9 @@ contains
 
     ! Openmmpol requires nuclear charges for initialization
     call getNuclChargeVector(zVector, speciesNames, species0)
-    call ommp_init_qm_helper(this%pQmHelper, nAtom, coords, initCharges, zVector)
+    call ommp_init_qm_helper(this%pQmHelper, nAtom, input%coords, initCharges, zVector)
     call ommp_qm_helper_set_attype(this%pQMHelper, input%qmAtomTypes)
-    call ommp_qm_helper_init_vdw_prm(this%pQMHelper, input%qmParamsFilename)
+    call ommp_qm_helper_init_vdw_prm(this%pQMHelper, input%ParamFileQm)
 
     if (this%pSystem%amoeba) then
       this%pQMHelper%V_pp2n_req = .true.
@@ -249,7 +252,7 @@ contains
     this%tChargesUpdated = .false.
 
     ! TODO: remove debug lines
-    call error("DEBUG: stopping")
+    ! call error("DEBUG: stopping")
   #:else
     call notImplementedError
   #:endif
@@ -497,7 +500,7 @@ contains
     integer, allocatable :: nNeigh(:)
 
   #:if WITH_OPENMMPOL
-    call notImplementedError
+    ! call notImplementedError
     
     !> TODO: do not forget to update the MM coordinates as well
     ! Evaluate bonded and non-bonded energy terms for the initial geometry

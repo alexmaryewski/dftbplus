@@ -2288,23 +2288,9 @@ contains
               & this%nAtom, this%species0, this%speciesName, errStatus)
         end if
         this%areSolventNeighboursSym = .false.
-      end if
-      if (errStatus%hasError()) then
-        call error(errStatus%message)
-      end if
-      if (.not.allocated(this%solvation)) then
-        call error("Could not initialize solvation model!")
-      end if
-      
-      ! Openmmpol molecular dynamics block
-      if (allocated(input%ctrl%openmmpolInput)) then
-
+      else if (allocated(input%ctrl%solvInp%openmmpolInput)) then
         if (this%tForces) then
           call error("Openmmpol forces are not yet implemented.")
-        end if
-
-        if (this%tPeriodic) then
-           call error("Periodic boundary conditions are not supported in openmmpol.")
         end if
   
         if (allocated(this%multipoleInp%dipoleAtom) .or. &
@@ -2328,10 +2314,6 @@ contains
            call error("Linear response calculations with openmmpol are not yet supported.")
         end if
   
-        if (allocated(input%ctrl%solvInp)) then
-          call error("Implicit solvent models are not compatible with openmmpol.")
-        end if
-  
         if (input%ctrl%tPlumed) then
            call error("PLUMED calculations with openmmpol are not supported.")
         end if
@@ -2341,17 +2323,24 @@ contains
           call error("Transport calculations with openmmpol are not supported.")
         end if
       #:endif
-        
-      if (this%tPeriodic) then
-        call createSolvationModel(this%solvation, input%ctrl%openmmpolInput, &
-            & this%nAtom, this%species0, this%speciesName, errStatus, this%coord0, this%latVec)
-      else
-        call createSolvationModel(this%solvation, input%ctrl%openmmpolInput, &
-            & this%nAtom, this%species0, this%speciesName, errStatus, this%coord0)
+
+        if (this%tPeriodic) then
+          call createSolvationModel(this%solvation, input%ctrl%solvInp%openmmpolInput, &
+              & this%nAtom, this%species0, this%speciesName, errStatus, this%latVec)
+        else
+          call createSolvationModel(this%solvation, input%ctrl%solvInp%openmmpolInput, &
+              & this%nAtom, this%species0, this%speciesName, errStatus)
+        end if
+        this%areSolventNeighboursSym = .false.
       end if
 
-     end if
-
+      if (errStatus%hasError()) then
+        call error(errStatus%message)
+      end if
+      if (.not.allocated(this%solvation)) then
+        call error("Could not initialize solvation model!")
+      end if
+      
       areNeighboursSymmetric = areNeighboursSymmetric .or. this%areSolventNeighboursSym
       this%cutOff%mCutOff = max(this%cutOff%mCutOff, this%solvation%getRCutOff())
 

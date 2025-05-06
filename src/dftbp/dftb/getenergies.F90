@@ -258,15 +258,11 @@ contains
     end if
 
     if (allocated(solvation)) then
-      ! select type (solvation)
-      ! type is (TOpenmmpol)
-      ! class default
         call solvation%getEnergies(energy%atomSolv, energy%atomQmmmStat, energy%atomQmmmPol,&
           & energy%EmmmmStat, energy%EmmmmPol, energy%EqmmmBonded, energy%EqmmmNonBonded)
         energy%eSolv = sum(energy%atomSolv(iAtInCentralRegion))
         energy%EqmmmStat = sum(energy%atomQmmmStat(iAtInCentralRegion))
         energy%EqmmmPol = sum(energy%atomQmmmPol(iAtInCentralRegion))
-      ! end select
     end if
 
     if (allocated(onSiteElements)) then

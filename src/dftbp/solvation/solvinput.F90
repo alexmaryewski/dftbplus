@@ -37,6 +37,9 @@ module dftbp_solvation_solvinput
     !> Solvent accessible surface area input data
     type(TSASAInput), allocatable :: SASAInp
 
+    !> Openmmpol QM/MM input data
+    type(TOpenmmpolInput), allocatable :: openmmpolInput
+
   end type TSolvationInp
 
 
@@ -200,9 +203,8 @@ contains
   end subroutine createSASAModel
 
 
-  !> Wrapper to create a generalized Born model
-  subroutine createOpenmmpolModel(solvation, input, nAtom, species0, speciesNames, errStatus, &
-      & coords, latVecs)
+  !> Wrapper to create an Openmmpol model
+  subroutine createOpenmmpolModel(solvation, input, nAtom, species0, speciesNames, errStatus, latVecs)
 
     !> Generic solvation model
     class(TSolvation), allocatable, intent(out) :: solvation
@@ -222,9 +224,6 @@ contains
     !> Error status
     type(TStatus), intent(out) :: errStatus
 
-    !> Initial atomic coordinates
-    real(dp), intent(in) :: coords(:,:)
-
     !> Lattice vectors, if the system is periodic
     real(dp), intent(in), optional :: latVecs(:,:)
 
@@ -232,7 +231,7 @@ contains
 
     allocate(model)
 
-    call TOpenmmpol_init(model, input, nAtom, species0, speciesNames, errStatus, coords, latVecs)
+    call TOpenmmpol_init(model, input, nAtom, species0, speciesNames, errStatus, latVecs)
     @:PROPAGATE_ERROR(errStatus)
 
     call move_alloc(model, solvation)
