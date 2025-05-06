@@ -319,29 +319,49 @@ contains
 
 
   !> Get energy contributions
-  subroutine getEnergies(this, energies)
+  subroutine getEnergies(this, energiesSolv, energiesQmmmStat, energiesQmmmPol,&
+    & energyMmmmStat, energyMmmmPol, energyBonded, energyNonbonded)
 
     !> Data structure
     class(TCosmo), intent(inout) :: this
 
-    !> Energy contributions for each atom
-    real(dp), intent(out) :: energies(:)
+    !> Atomic energy contributions from implicit solvation for each atom
+    real(dp), intent(out) :: energiesSolv(:)
+
+    !> Atomic energy contributions from static QM/MM multipoles for each atom
+    real(dp), intent(out) :: energiesQmmmStat(:)
+
+    !> Atomic energy contributions from polarizable QM/MM multipoles (IPDs, Drude particles, etc)
+    real(dp), intent(out) :: energiesQmmmPol(:)
+
+    !> MM/MM electrostatic energy from static multipoles
+    real(dp), intent(out) :: energyMmmmStat
+
+    !> MM/MM electrostatic energy from polarizable multipoles
+    real(dp), intent(out) :: energyMmmmPol
+
+    !> Total energy of all bonded terms in QM/MM (bond, angle, torsion potentials, etc)
+    real(dp), intent(out) :: energyBonded
+
+    !> Total energy of all non-bonded terms in QM/MM (vdW potentials, etc)
+    real(dp), intent(out) :: energyNonbonded
 
     integer :: iat
 
     @:ASSERT(this%tCoordsUpdated)
     @:ASSERT(this%tChargesUpdated)
-    @:ASSERT(size(energies) == this%nAtom)
+    @:ASSERT(size(energiesSolv) == this%nAtom)
 
     if (allocated(this%sasaCont)) then
-      call this%sasaCont%getEnergies(energies)
+      call this%sasaCont%getEnergies(energiesSolv, energiesQmmmStat, energiesQmmmPol,&
+        & energyMmmmStat, energyMmmmPol, energyBonded, energyNonbonded)
     else
-      energies(:) = 0.0_dp
+      energiesSolv(:) = 0.0_dp
     end if
 
-    do iat = 1, size(energies)
-      energies(iat) = this%keps * dot_product(this%sigma(:, iat), this%psi(:, iat)) &
-         & + this%freeEnergyShift / real(this%nAtom, dp) + energies(iat)
+    do iat = 1, size(energiesSolv)
+      energiesSolv(iat) = this%keps * dot_product(this%sigma(:, iat), this%psi(:, iat)) &
+         & + this%freeEnergyShift / real(this%nAtom, dp) + energiesSolv(iat)
     end do
 
   end subroutine getEnergies

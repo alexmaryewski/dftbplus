@@ -79,24 +79,22 @@ module dftbp_extlibs_openmmpol
       !> Site-resolved potential
       real(dp), allocatable :: potential(:)
 
-      !> QM/MM electrostatic energy from constant multipoles
-      !! (site-resolved)
-      real(dp), allocatable :: energyQmElecStat(:)
+      !> Atomic energy contributions from static QM/MM multipoles for each atom
+      real(dp), allocatable :: energiesQmmmStat(:)
 
-      !> QM/MM electrostatic energy from polarizable multipoles
-      !! (site-resolved)
-      real(dp), allocatable :: energyQmElecPol(:)
+      !> Atomic energy contributions from polarizable QM/MM multipoles (IPDs, Drude particles, etc)
+      real(dp), allocatable :: energiesQmmmPol(:)
 
-      !> MM/MM electrostatic energy from constant multipoles
-      real(dp) :: energyMmElecStat
+      !> MM/MM electrostatic energy from static multipoles
+      real(dp) :: energyMmmmStat
 
       !> MM/MM electrostatic energy from polarizable multipoles
-      real(dp) :: energyMmElecPol
-
-      !> Total energy of all bonding terms in the force field
+      real(dp) :: energyMmmmPol
+  
+      !> Total energy of all bonded terms in QM/MM (bond, angle, torsion potentials, etc)
       real(dp) :: energyBonded
-
-      !> Total energy of all non-bonded terms in the force field
+  
+      !> Total energy of all non-bonded terms in QM/MM (vdW potentials, etc)
       real(dp) :: energyNonbonded
 
       !> Linear solver
@@ -199,10 +197,12 @@ contains
 
     this%energyBonded = 0.0_dp
     this%energyNonbonded = 0.0_dp
+    this%energyMmmmStat = 0.0_dp
+    this%energyMmmmPol = 0.0_dp
 
     allocate(this%potential(nAtom), source=0.0_dp)
-    allocate(this%energyQmElecStat(nAtom), source=0.0_dp)
-    allocate(this%energyQmElecPol(nAtom), source=0.0_dp)
+    allocate(this%energiesQmmmStat(nAtom), source=0.0_dp)
+    allocate(this%energiesQmmmPol(nAtom), source=0.0_dp)
 
     ! Tinker compatibility is enforced by default
     call ommp_ignore_duplicated_opb_prm()
@@ -267,8 +267,8 @@ contains
     call ommp_terminate_qm_helper(this%pQmHelper)
     call ommp_terminate(this%pSystem)
     deallocate(this%potential)
-    deallocate(this%energyQmElecStat)
-    deallocate(this%energyQmElecPol)
+    deallocate(this%energiesQmmmStat)
+    deallocate(this%energiesQmmmPol)
   #:else
     call notImplementedError
   #:endif
@@ -297,26 +297,34 @@ contains
 
 
   !> Get energy contributions
-  subroutine getEnergies(this, energies)
+  subroutine getEnergies(this, energiesSolv, energiesQmmmStat, energiesQmmmPol,&
+    & energyMmmmStat, energyMmmmPol, energyBonded, energyNonbonded)
 
     !> Instance.
     class(TOpenmmpol), intent(inout) :: this
 
-    !> energy contributions for each atom
-    real(dp), intent(out) :: energies(:)
+    !> Atomic energy contributions from implicit solvation for each atom
+    real(dp), intent(out) :: energiesSolv(:)
 
-    ! @:ASSERT(this%tCoordsUpdated)
-    ! @:ASSERT(this%tChargesUpdated)
-    ! @:ASSERT(size(energies) == this%nAtom)
+    !> Atomic energy contributions from static QM/MM multipoles for each atom
+    real(dp), intent(out) :: energiesQmmmStat(:)
 
-    ! if (allocated(this%sasaCont)) then
-      ! call this%sasaCont%getEnergies(energies)
-    ! else
-      ! energies(:) = 0.0_dp
-    ! end if
+    !> Atomic energy contributions from polarizable QM/MM multipoles (IPDs, Drude particles, etc)
+    real(dp), intent(out) :: energiesQmmmPol(:)
 
-    ! energies(:) = energies + 0.5_dp * (this%shift * this%chargesPerAtom) &
-      !  & + this%param%freeEnergyShift / real(this%nAtom, dp)
+    !> MM/MM electrostatic energy from static multipoles
+    real(dp), intent(out) :: energyMmmmStat
+
+    !> MM/MM electrostatic energy from polarizable multipoles
+    real(dp), intent(out) :: energyMmmmPol
+
+    !> Total energy of all bonded terms in QM/MM (bond, angle, torsion potentials, etc)
+    real(dp), intent(out) :: energyBonded
+
+    !> Total energy of all non-bonded terms in QM/MM (vdW potentials, etc)
+    real(dp), intent(out) :: energyNonbonded
+
+    ! energies(:) = 0.0_dp
 
   end subroutine getEnergies
 
@@ -452,10 +460,10 @@ contains
 
     ! Compute and store electrostatic energies;
     ! QM/MM energies are site-resolved
-    this%energyQmElecStat(:) = this%pQMHelper%V_m2n * this%pQMHelper%qqm
-    this%energyMmElecStat = ommp_get_fixedelec_energy(this%pSystem)
-    this%energyQmElecPol(:) = 0.5_dp * this%pQMHelper%V_p2n * this%pQMHelper%qqm
-    this%energyMmElecPol = ommp_get_polelec_energy(this%pSystem)
+    this%energiesQmmmStat(:) = this%pQMHelper%V_m2n * this%pQMHelper%qqm
+    this%energyMmmmStat = ommp_get_fixedelec_energy(this%pSystem)
+    this%energiesQmmmPol(:) = 0.5_dp * this%pQMHelper%V_p2n * this%pQMHelper%qqm
+    this%energyMmmmPol = ommp_get_polelec_energy(this%pSystem)
 
     this%tChargesUpdated = .true.
   #:else

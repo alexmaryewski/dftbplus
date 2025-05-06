@@ -95,14 +95,34 @@ module dftbp_solvation_solvation
 
 
     !> Get energy contributions
-    subroutine getEnergies(this, energies)
+    subroutine getEnergies(this, energiesSolv, energiesQmmmStat, energiesQmmmPol,&
+      & energyMmmmStat, energyMmmmPol, energyBonded, energyNonbonded)
       import :: TSolvation, dp
 
       !> Data structure
       class(TSolvation), intent(inout) :: this
 
-      !> Energy contributions for each atom
-      real(dp), intent(out) :: energies(:)
+      !> Atomic energy contributions from implicit solvation for each atom
+      real(dp), intent(out) :: energiesSolv(:)
+
+      !> Atomic energy contributions from static QM/MM multipoles for each atom
+      real(dp), intent(out) :: energiesQmmmStat(:)
+
+      !> Atomic energy contributions from polarizable QM/MM multipoles (IPDs, Drude particles, etc)
+      real(dp), intent(out) :: energiesQmmmPol(:)
+
+      !> MM/MM electrostatic energy from static multipoles
+      real(dp), intent(out) :: energyMmmmStat
+
+      !> MM/MM electrostatic energy from polarizable multipoles
+      real(dp), intent(out) :: energyMmmmPol
+
+      !> Total energy of all bonded terms in QM/MM (bond, angle, torsion potentials, etc)
+      real(dp), intent(out) :: energyBonded
+
+      !> Total energy of all non-bonded terms in QM/MM (vdW potentials, etc)
+      real(dp), intent(out) :: energyNonbonded
+
 
     end subroutine getEnergies
 

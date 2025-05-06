@@ -77,6 +77,24 @@ module dftbp_dftb_energytypes
     !> Solvation free energy
     real(dp) :: ESolv = 0.0_dp
 
+    !> QM/MM static multipole interaction dependent energy
+    real(dp) :: EqmmmStat = 0.0_dp
+
+    !> QM/MM polarizable multipole interaction energy
+    real(dp) :: EqmmmPol = 0.0_dp
+
+    !> MM/MM static multipole interaction energy
+    real(dp) :: EmmmmStat = 0.0_dp
+
+    !> MM/MM polarizable multipole interaction energy
+    real(dp) :: EmmmmPol = 0.0_dp
+
+    !> QM/MM force field (density-matrix independent) energy
+    real(dp) :: EqmmmBonded = 0.0_dp
+
+    !> QM/MM force field non-bonded (vdW and similar) energy
+    real(dp) :: EqmmmNonBonded = 0.0_dp
+
     !> Excitation energy
     real(dp) :: Eexcited = 0.0_dp
 
@@ -145,6 +163,12 @@ module dftbp_dftb_energytypes
     !> Atom resolved 3rd order
     real(dp), allocatable :: atom3rd(:)
 
+    !> Atom resolved QM/MM static multipole energy
+    real(dp), allocatable :: atomQmmmStat(:)
+
+    !> Atom resolved QM/MM static multipole energy
+    real(dp), allocatable :: atomQmmmPol(:)
+
     !> Atom resolved solvation free energy
     real(dp), allocatable :: atomSolv(:)
 
@@ -193,6 +217,8 @@ contains
     allocate(this%atomHalogenX(nAtom))
     allocate(this%atom3rd(nAtom))
     allocate(this%atomSolv(nAtom))
+    allocate(this%atomQmmmStat(nAtom))
+    allocate(this%atomQmmmPol(nAtom))
     allocate(this%atomTotal(nAtom))
     this%atomRep(:) = 0.0_dp
     this%atomNonSCC(:) = 0.0_dp
@@ -207,6 +233,8 @@ contains
     this%atomHalogenX(:) = 0.0_dp
     this%atom3rd(:) = 0.0_dp
     this%atomSolv(:) = 0.0_dp
+    this%atomQmmmStat(:) = 0.0_dp
+    this%atomQmmmPol(:) = 0.0_dp
     this%atomTotal(:) = 0.0_dp
 
     this%Erep = 0.0_dp
@@ -223,6 +251,10 @@ contains
     this%EHalogenX = 0.0_dp
     this%E3rd = 0.0_dp
     this%ESolv = 0.0_dp
+    this%EqmmmStat = 0.0_dp
+    this%EqmmmPol = 0.0_dp
+    this%EqmmmBonded = 0.0_dp
+    this%EqmmmNonBonded = 0.0_dp
     this%Etotal = 0.0_dp
     this%EMermin = 0.0_dp
     this%EGibbs = 0.0_dp
