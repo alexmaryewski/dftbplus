@@ -123,7 +123,6 @@ module dftbp_solvation_solvation
       !> Total energy of all non-bonded terms in QM/MM (vdW potentials, etc)
       real(dp), intent(out) :: energyNonbonded
 
-
     end subroutine getEnergies
 
 

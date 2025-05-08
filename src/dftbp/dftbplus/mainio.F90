@@ -3223,7 +3223,7 @@ contains
   subroutine writeDetailedOut3(fd, qInput, qOutput, energy, species, tDFTBU, tPrintMulliken, Ef,&
       & pressure, cellVol, tAtomicEnergy, dispersion, isExtField, tPeriodic, nSpin, tSpin,&
       & tSpinOrbit, tScc, tOnSite, iAtInCentralRegion, electronicSolver, tHalogenX,&
-      & tHybridXc, t3rd, tSolv)
+      & tHybridXc, t3rd, tSolv, tQmmm)
 
     !> File ID
     integer, intent(in) :: fd
@@ -3297,8 +3297,11 @@ contains
     !> Is this a 3rd order scc calculation?
     logical, intent(in) :: t3rd
 
-    !> Is this a solvation model used?
+    !> Is a solvation model used?
     logical, intent(in) :: tSolv
+
+    !> Is this a QM/MM calculation?
+    logical, intent(in) :: tQmmm
 
     real(dp), allocatable :: qInputUpDown(:,:,:), qOutputUpDown(:,:,:)
     integer :: nSpinHams
@@ -3383,6 +3386,21 @@ contains
 
     if (tSolv) then
       write(fd, format2U) 'Solvation energy', energy%ESolv, 'H', energy%ESolv * Hartree__eV, 'eV'
+    end if
+
+    if (tQmmm) then
+      write(fd, format2U) 'QM/MM stat. inter. energy', energy%EqmmmStat, 'H',&
+          & energy%EqmmmStat * Hartree__eV, 'eV'
+      write(fd, format2U) 'QM/MM pol. inter. energy', energy%EqmmmPol, 'H',&
+          & energy%EqmmmPol * Hartree__eV, 'eV'
+      write(fd, format2U) 'MM stat. self-inter. energy', energy%EmmmmStat, 'H',&
+          & energy%EmmmmStat * Hartree__eV, 'eV'
+      write(fd, format2U) 'MM pol. self-inter. energy', energy%EmmmmPol, 'H',&
+          & energy%EmmmmPol * Hartree__eV, 'eV'
+      write(fd, format2U) 'MM bonded terms energy', energy%EqmmmBonded, 'H',&
+          & energy%EqmmmBonded * Hartree__eV, 'eV'
+      write(fd, format2U) 'MM non-bonded terms energy', energy%EqmmmNonBonded, 'H',&
+          & energy%EqmmmNonBonded * Hartree__eV, 'eV'
     end if
 
     write(fd, format2U) 'Total Electronic energy', energy%Eelec, 'H', energy%Eelec * Hartree__eV,&

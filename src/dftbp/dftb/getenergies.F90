@@ -357,13 +357,15 @@ contains
     type(TEnergies), intent(inout) :: energy
 
     energy%Eelec = energy%EnonSCC + energy%ESCC + energy%Espin + energy%ELS + energy%Edftbu&
-        & + energy%Eext + energy%e3rd + energy%eOnSite + energy%ESolv + energy%Efock
+        & + energy%Eext + energy%e3rd + energy%eOnSite + energy%ESolv + energy%EqmmmStat&
+        & + energy%EqmmmPol + energy%Efock
 
     energy%atomElec(:) = energy%atomNonSCC + energy%atomSCC + energy%atomSpin + energy%atomDftbu&
         & + energy%atomLS + energy%atomExt + energy%atom3rd + energy%atomOnSite &
-        & + energy%atomSolv
+        & + energy%atomSolv + energy%atomQmmmStat + energy%atomQmmmPol
     energy%atomTotal(:) = energy%atomElec + energy%atomRep + energy%atomDisp + energy%atomHalogenX
-    energy%Etotal = energy%Eelec + energy%Erep + energy%eDisp + energy%eHalogenX
+    energy%Etotal = energy%Eelec + energy%Erep + energy%eDisp + energy%eHalogenX + energy%EmmmmStat &
+        & + energy%EmmmmPol + energy%EqmmmBonded + energy%EqmmmNonBonded
     energy%EMermin = energy%Etotal - sum(energy%TS)
     ! energy extrapolated to 0 K
     energy%Ezero = energy%Etotal - 0.5_dp * sum(energy%TS)

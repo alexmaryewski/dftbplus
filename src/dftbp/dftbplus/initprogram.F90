@@ -422,6 +422,9 @@ module dftbp_dftbplus_initprogram
     !> Common Fermi level across spin channels
     logical :: tSpinSharedEf
 
+    !> Is this a QM/MM calculation driven from inside DFTB+?
+    logical :: tQmmm
+
     !> Geometry optimisation needed?
     logical :: isGeoOpt
 
@@ -2259,6 +2262,7 @@ contains
     end if
 
     ! Solvent block
+    this%tQmmm = .false.
     this%areSolventNeighboursSym = .false.
     if (allocated(input%ctrl%solvInp)) then
       if (allocated(input%ctrl%solvInp%GBInp)) then
@@ -2317,12 +2321,6 @@ contains
         if (input%ctrl%tPlumed) then
            call error("PLUMED calculations with openmmpol are not supported.")
         end if
-  
-      #:if WITH_TRANSPORT
-        if (input%transpar%defined) then
-          call error("Transport calculations with openmmpol are not supported.")
-        end if
-      #:endif
 
         if (this%tPeriodic) then
           call createSolvationModel(this%solvation, input%ctrl%solvInp%openmmpolInput, &
@@ -2332,6 +2330,7 @@ contains
               & this%nAtom, this%species0, this%speciesName, errStatus)
         end if
         this%areSolventNeighboursSym = .false.
+        this%tQmmm = .true.
       end if
 
       if (errStatus%hasError()) then

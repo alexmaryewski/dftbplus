@@ -235,7 +235,7 @@ contains
       this%pQMHelper%V_pp2n_req = .true.
     end if
     
-    ! Evaluate bonded and non-bonded energy terms for the initial geometry
+    ! Evaluate static energy contributions on the initial geometry
     this%energyBonded = ommp_get_full_bnd_energy(this%pSystem)
     this%energyNonbonded = ommp_get_vdw_energy(this%pSystem) + &
         & ommp_qm_helper_vdw_energy(this%pQMHelper, this%pSystem)
@@ -251,8 +251,6 @@ contains
     this%tCoordsUpdated = .false.
     this%tChargesUpdated = .false.
 
-    ! TODO: remove debug lines
-    ! call error("DEBUG: stopping")
   #:else
     call notImplementedError
   #:endif
@@ -327,7 +325,13 @@ contains
     !> Total energy of all non-bonded terms in QM/MM (vdW potentials, etc)
     real(dp), intent(out) :: energyNonbonded
 
-    ! energies(:) = 0.0_dp
+    energiesSolv(:) = 0.0_dp
+    energiesQmmmStat(:) = this%energiesQmmmStat
+    energiesQmmmPol(:) = this%energiesQmmmPol
+    energyMmmmStat = this%energyMmmmStat
+    energyMmmmPol = this%energyMmmmPol
+    energyBonded = this%energyBonded
+    energyNonbonded = this%energyNonbonded
 
   end subroutine getEnergies
 
@@ -459,14 +463,15 @@ contains
         this%potential = -(this%pQMHelper%V_p2n + this%pQMHelper%V_m2n)
       end if
 
+      this%energiesQmmmPol(:) = 0.5_dp * this%pQMHelper%V_p2n * this%pQMHelper%qqm
+      this%energyMmmmPol = ommp_get_polelec_energy(this%pSystem)
+    else
+      this%potential = -this%pQMHelper%V_m2n
     end if
 
-    ! Compute and store electrostatic energies;
-    ! QM/MM energies are site-resolved
+    ! Compute and store 
     this%energiesQmmmStat(:) = this%pQMHelper%V_m2n * this%pQMHelper%qqm
     this%energyMmmmStat = ommp_get_fixedelec_energy(this%pSystem)
-    this%energiesQmmmPol(:) = 0.5_dp * this%pQMHelper%V_p2n * this%pQMHelper%qqm
-    this%energyMmmmPol = ommp_get_polelec_energy(this%pSystem)
 
     this%tChargesUpdated = .true.
   #:else
