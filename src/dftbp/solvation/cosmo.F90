@@ -148,6 +148,9 @@ module dftbp_solvation_cosmo
     !> Relative dielectric constant for solvent
     procedure :: getEpsilon_r
 
+    !> is a QM/MM simulation?
+    procedure :: isQmmm
+
     !> Write cavity information
     procedure :: writeCosmoFile
 
@@ -630,6 +633,20 @@ contains
     e_r = this%dielectricConst
 
   end function getEpsilon_r
+
+
+  !> Does solvation model represent a QM/MM simulation?
+  pure function isQmmm(this) result(qmmm)
+
+    !> Data structure
+    class(TCosmo), intent(in) :: this
+
+    !> Logical return value
+    logical :: qmmm
+
+    qmmm = .false.
+
+  end function isQmmm
 
 
   !> Evaluate the Coulomb interactions between the atomic sites (xyz) and the

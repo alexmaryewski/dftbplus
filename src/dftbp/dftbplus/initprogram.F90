@@ -78,6 +78,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_elecsolvers_elsisolver, only : TElsiSolver_init, TElsiSolver_final
   use dftbp_extlibs_arpack, only : withArpack
   use dftbp_extlibs_elsiiface, only : withELSI
+  use dftbp_extlibs_openmmpol, only : ensureOpenmmpolCompatibility
   use dftbp_extlibs_plumed, only : withPlumed, TPlumedCalc, TPlumedCalc_init
   use dftbp_extlibs_poisson, only : TPoissonInput
   use dftbp_extlibs_sdftd3, only : TSDFTD3, TSDFTD3_init, writeSDFTD3Info
@@ -422,9 +423,6 @@ module dftbp_dftbplus_initprogram
     !> Common Fermi level across spin channels
     logical :: tSpinSharedEf
 
-    !> Is this a QM/MM calculation driven from inside DFTB+?
-    logical :: tQmmm
-
     !> Geometry optimisation needed?
     logical :: isGeoOpt
 
@@ -445,6 +443,9 @@ module dftbp_dftbplus_initprogram
 
     !> Is this a MD calculation?
     logical :: tMD
+
+    !> Is this a QM/MM calculation driven from inside DFTB+?
+    logical :: tQMMM
 
     !> Output options for molecular dynamics data
     type(TMDOutput), allocatable :: mdOutput
@@ -1872,6 +1873,9 @@ contains
     this%isSccConvRequired = input%ctrl%isSccConvRequired
     this%tMD = input%ctrl%tMD
     if (this%tMD) this%mdOutput = input%ctrl%mdOutput
+    if (allocated(input%ctrl%solvInp)) then
+      this%tQMMM = allocated(input%ctrl%solvInp%openmmpolInput)
+    end if
     this%tDerivs = input%ctrl%tDerivs
     this%tPrintMulliken = input%ctrl%tPrintMulliken
     this%tWriteCosmoFile = input%ctrl%tWriteCosmoFile .and. isIoProc
@@ -2262,7 +2266,6 @@ contains
     end if
 
     ! Solvent block
-    this%tQmmm = .false.
     this%areSolventNeighboursSym = .false.
     if (allocated(input%ctrl%solvInp)) then
       if (allocated(input%ctrl%solvInp%GBInp)) then
@@ -2293,34 +2296,10 @@ contains
         end if
         this%areSolventNeighboursSym = .false.
       else if (allocated(input%ctrl%solvInp%openmmpolInput)) then
-        if (this%tForces) then
-          call error("Openmmpol forces are not yet implemented.")
-        end if
-  
-        if (allocated(this%multipoleInp%dipoleAtom) .or. &
-            & allocated(this%multipoleInp%quadrupoleAtom)) then
-              call error("Multipolar DFTB or xTB calculations with openmmpol not yet supported.")
-        end if
-  
-        if (this%tExtChrg .or. this%isExtField) then
-          call error("External fields are not supported with openmmpol.")
-        end if
-  
-        if (allocated(this%reks)) then
-           call error("REKS calculations with openmmpol are not yet supported.")
-        end if
-  
-        if (allocated(input%ctrl%elecDynInp)) then
-           call error("Electron dynamics calculations with openmmpol are not supported.")
-        end if
-  
-        if (allocated(input%ctrl%lrespini)) then
-           call error("Linear response calculations with openmmpol are not yet supported.")
-        end if
-  
-        if (input%ctrl%tPlumed) then
-           call error("PLUMED calculations with openmmpol are not supported.")
-        end if
+        call ensureOpenmmpolCompatibility(this%tForces, (allocated(this%multipoleInp%dipoleAtom)&
+        & .or. allocated(this%multipoleInp%quadrupoleAtom)), (this%tExtChrg .or. this%isExtField),&
+        & allocated(this%reks), allocated(input%ctrl%elecDynInp), allocated(input%ctrl%lrespini),&
+        input%ctrl%tPlumed, this%tSocket, this%tHelical)
 
         if (this%tPeriodic) then
           call createSolvationModel(this%solvation, input%ctrl%solvInp%openmmpolInput, &
@@ -2330,7 +2309,6 @@ contains
               & this%nAtom, this%species0, this%speciesName, errStatus)
         end if
         this%areSolventNeighboursSym = .false.
-        this%tQmmm = .true.
       end if
 
       if (errStatus%hasError()) then

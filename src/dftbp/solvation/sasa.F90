@@ -150,6 +150,9 @@ module dftbp_solvation_sasa
     !> Relative dielectric constant for solvent
     procedure :: getEpsilon_r
 
+    !> is a QM/MM simulation?
+    procedure :: isQmmm
+
   end type TSASACont
 
 
@@ -685,5 +688,19 @@ contains
     e_r = 1.0_dp
 
   end function getEpsilon_r
+
+
+  !> Does solvation model represent a QM/MM simulation?
+  pure function isQmmm(this) result(qmmm)
+
+    !> Data structure
+    class(TSASACont), intent(in) :: this
+
+    !> Logical return value
+    logical :: qmmm
+
+    qmmm = .false.
+
+  end function isQmmm
 
 end module dftbp_solvation_sasa

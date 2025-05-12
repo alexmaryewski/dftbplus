@@ -53,6 +53,9 @@ module dftbp_solvation_solvation
     !> Relative dielectric constant in solvent region
     procedure(getEpsilon_r), deferred :: getEpsilon_r
 
+    !> Is a QM/MM simulation?
+    procedure(isQmmm), deferred :: isQmmm
+
   end type TSolvation
 
   abstract interface
@@ -257,6 +260,19 @@ module dftbp_solvation_solvation
       real(dp) :: e_r
 
     end function getEpsilon_r
+
+
+    !> Does solvation model represent a QM/MM simulation?
+    pure function isQmmm(this) result(qmmm)
+      import :: TSolvation
+
+      !> Data structure
+      class(TSolvation), intent(in) :: this
+
+      !> Logical return value
+      logical :: qmmm
+
+    end function isQmmm
 
   end interface
 

@@ -199,6 +199,9 @@ module dftbp_solvation_born
     !> Relative dielectric constant for solvent
     procedure :: getEpsilon_r
 
+    !> is a QM/MM simulation?
+    procedure :: isQmmm
+
   end type TGeneralizedBorn
 
 
@@ -1677,5 +1680,19 @@ contains
     e_r = this%param%dielectricConstant
 
   end function getEpsilon_r
+
+
+  !> Does solvation model represent a QM/MM simulation?
+  pure function isQmmm(this) result(qmmm)
+
+    !> Data structure
+    class(TGeneralizedBorn), intent(in) :: this
+
+    !> Logical return value
+    logical :: qmmm
+
+    qmmm = .false.
+
+  end function isQmmm
 
 end module dftbp_solvation_born

@@ -34,15 +34,44 @@ module dftbp_extlibs_openmmpol
     
     private
     public TOpenmmpol, TOpenmmpolInput, TOpenmmpol_init, TOpenmmpol_final
-    public writeOpenmmpolInfo
+    public writeOpenmmpolInfo, ensureOpenmmpolCompatibility
 
     ! Constant for AMBER identification inside openmmpol
     integer, protected :: OMMP_FF_AMBER = 0
   
     !> Library interface handler
     type, extends(TSolvation) :: TOpenmmpol
-      !> number of atoms
+      private
+
+      !> Number of atoms in the QM region
       integer :: nAtom = 0
+
+      !> Number of atoms in the MM region simulation
+      integer :: nAtomMM = 0
+
+      !> Type of the atoms in the MM region
+      integer, allocatable :: species0MM(:)
+
+      !> Coords in central cell for the MM region (3, nAtomMM)
+      real(dp), allocatable :: coord0Qmmm
+
+      !> Labels of atomic species in the MM region
+      character(mc), allocatable :: speciesNameQmmm(:)
+
+      !> List of atomic masses in the MM region
+      real(dp), allocatable :: massQmmm(:)
+
+      !> MD velocities for the MM atoms
+      ! real(dp), allocatable :: velocitiesQmmm(:,:)
+
+      !> MD velocities for moved atoms
+      ! real(dp), allocatable :: movedVeloQmmm(:,:)
+  
+      !> MD acceleration for moved atoms
+      ! real(dp), allocatable :: movedAccelQmmm(:,:)
+  
+      !> Mass of the moved atoms
+      ! real(dp), allocatable :: movedMassQmmm(:,:)
 
       !> solvation free energy
       real(dp), allocatable :: energies(:)
@@ -131,6 +160,9 @@ module dftbp_extlibs_openmmpol
 
       !> Relative dielectric constant for solvent
       procedure :: getEpsilon_r
+
+      !> is a QM/MM simulation?
+      procedure :: isQmmm
 
     end type
 
@@ -574,6 +606,20 @@ contains
   end function isEFieldModified
 
 
+  !> Does solvation model represent a QM/MM simulation?
+  pure function isQmmm(this) result(qmmm)
+
+    !> Data structure
+    class(TOpenmmpol), intent(in) :: this
+
+    !> Logical return value
+    logical :: qmmm
+
+    qmmm = .false.
+
+  end function isQmmm
+
+
   !> Returns solvent region relative dielectric constant
   pure function getEpsilon_r(this) result(e_r)
 
@@ -602,6 +648,74 @@ contains
   end function getRCutoff
 
 
+  !> Run checks to ensure that 
+  subroutine ensureOpenmmpolCompatibility(tForces, tMultipole, tExtField, tReks, tElecDyn,&
+      & tLinResp, tPlumed, tSocket, tHelical)
+    
+    !> Does calculation use forces?
+    logical :: tForces
+    
+    !> Does calculation use QM multipoles?
+    logical :: tMultipole
+
+    !> Does calculation use external fields and/or charges?
+    logical :: tExtField
+
+    !> Does calculation use REKS?
+    logical :: tReks
+
+    !> Does calculation use electron dynamics?
+    logical :: tElecDyn
+
+    !> Does calculation use linear response?
+    logical :: tLinResp
+
+    !> Does calculation use PLUMED?
+    logical :: tPlumed
+
+    !> Does calculation use socket communication?
+    logical :: tSocket
+
+    !> Does calculation use herlical boundary conditions?
+    logical :: tHelical
+    
+    if (tForces) then
+      call error("Openmmpol forces are not yet implemented.")
+    end if
+
+    if (tMultipole) then
+      call error("DFTB or xTB calculations using multipoles are not yet supported by openmmpol.")
+    end if
+
+    if (tExtField) then
+      call error("External fields are not supported with openmmpol.")
+    end if
+
+    if (tReks) then
+       call error("REKS calculations with openmmpol are not yet supported.")
+    end if
+
+    if (tElecDyn) then
+       call error("Electron dynamics calculations with openmmpol are not supported.")
+    end if
+
+    if (tLinResp) then
+       call error("Linear response calculations with openmmpol are not yet supported.")
+    end if
+    
+    ! TODO: are they though?
+    if (tPlumed) then
+       call error("PLUMED calculations with openmmpol are not supported.")
+    end if
+    
+    if (tSocket) then
+      call error("Socket communication is not supported by openmmpol.")
+    end if
+    
+  end subroutine ensureOpenmmpolCompatibility
+
+
+  !> Get a vector of nuclear charges from a list of atomic symbols
   subroutine getNuclChargeVector(Zvector, speciesNames, species)
 
     !> Nuclear charge vector

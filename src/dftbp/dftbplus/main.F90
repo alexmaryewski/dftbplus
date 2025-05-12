@@ -1060,7 +1060,7 @@ contains
           & this%dispersion, allocated(this%eField), this%tPeriodic, this%nSpin, this%tSpin,&
           & this%tSpinOrbit, this%tSccCalc, allocated(this%onSiteElements),&
           & this%iAtInCentralRegion, this%electronicSolver, this%isHalogenEgyPrinted,&
-          & this%isHybridXc, allocated(this%thirdOrd), allocated(this%solvation), this%tQmmm)
+          & this%isHybridXc, allocated(this%thirdOrd), this%solvation)
     end if
 
   end subroutine sccLoopWriting
@@ -1597,7 +1597,7 @@ contains
             & this%dispersion, allocated(this%eField), this%tPeriodic, this%nSpin, this%tSpin,&
             & this%tSpinOrbit, this%tSccCalc, allocated(this%onSiteElements),&
             & this%iAtInCentralRegion, this%electronicSolver, this%isHalogenEgyPrinted,&
-            & this%isHybridXc, allocated(this%thirdOrd), allocated(this%solvation), this%tQmmm)
+            & this%isHybridXc, allocated(this%thirdOrd), this%solvation)
       end if
     end if
 
