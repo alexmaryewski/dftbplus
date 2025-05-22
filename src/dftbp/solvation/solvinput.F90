@@ -83,7 +83,7 @@ contains
       call writeSASAContInfo(unit, solvation)
 
     type is(TOpenmmpol)
-      write(unit, '(a)') "Openmmpol QM/MM model"
+      write(unit, '(a)') "QM/MM (openmmpol)"
       
     class default
       write(unit, '(a)') "internal error"

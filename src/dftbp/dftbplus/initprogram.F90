@@ -444,9 +444,6 @@ module dftbp_dftbplus_initprogram
     !> Is this a MD calculation?
     logical :: tMD
 
-    !> Is this a QM/MM calculation driven from inside DFTB+?
-    logical :: tQMMM
-
     !> Output options for molecular dynamics data
     type(TMDOutput), allocatable :: mdOutput
 
@@ -1873,9 +1870,6 @@ contains
     this%isSccConvRequired = input%ctrl%isSccConvRequired
     this%tMD = input%ctrl%tMD
     if (this%tMD) this%mdOutput = input%ctrl%mdOutput
-    if (allocated(input%ctrl%solvInp)) then
-      this%tQMMM = allocated(input%ctrl%solvInp%openmmpolInput)
-    end if
     this%tDerivs = input%ctrl%tDerivs
     this%tPrintMulliken = input%ctrl%tPrintMulliken
     this%tWriteCosmoFile = input%ctrl%tWriteCosmoFile .and. isIoProc
@@ -2299,7 +2293,7 @@ contains
         call ensureOpenmmpolCompatibility(this%tForces, (allocated(this%multipoleInp%dipoleAtom)&
         & .or. allocated(this%multipoleInp%quadrupoleAtom)), (this%tExtChrg .or. this%isExtField),&
         & allocated(this%reks), allocated(input%ctrl%elecDynInp), allocated(input%ctrl%lrespini),&
-        input%ctrl%tPlumed, this%tSocket, this%tHelical)
+        input%ctrl%tPlumed, this%tSocket, this%tHelical, this%deltaDftb%isNonAufbau)
 
         if (this%tPeriodic) then
           call createSolvationModel(this%solvation, input%ctrl%solvInp%openmmpolInput, &

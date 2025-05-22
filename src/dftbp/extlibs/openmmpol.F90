@@ -49,31 +49,31 @@ module dftbp_extlibs_openmmpol
       !> Number of atoms in the MM region simulation
       integer :: nAtomMM = 0
 
-      !> Type of the atoms in the MM region
-      integer, allocatable :: species0MM(:)
-
       !> Coords in central cell for the MM region (3, nAtomMM)
-      real(dp), allocatable :: coord0Qmmm
+      real(dp), allocatable :: coord0MM
 
       !> Labels of atomic species in the MM region
       character(mc), allocatable :: speciesNameQmmm(:)
 
       !> List of atomic masses in the MM region
-      real(dp), allocatable :: massQmmm(:)
+      real(dp), allocatable :: massMM(:)
 
-      !> MD velocities for the MM atoms
-      ! real(dp), allocatable :: velocitiesQmmm(:,:)
+      !> MD velocities for atoms in the MM region
+      real(dp), allocatable :: velocitiesMM(:,:)
 
-      !> MD velocities for moved atoms
-      ! real(dp), allocatable :: movedVeloQmmm(:,:)
+      !> MD velocities for moved atoms in the MM region
+      real(dp), allocatable :: movedVeloMM(:,:)
   
-      !> MD acceleration for moved atoms
-      ! real(dp), allocatable :: movedAccelQmmm(:,:)
+      !> MD acceleration for moved atoms in the MM region
+      real(dp), allocatable :: movedAccelMM(:,:)
   
       !> Mass of the moved atoms
-      ! real(dp), allocatable :: movedMassQmmm(:,:)
+      real(dp), allocatable :: movedMassMM(:,:)
 
-      !> solvation free energy
+      !> Energy gradient with respect to MM atoms
+      real(dp), allocatable :: derivsMM(:,:)
+
+      !> atom-resolved solvation energy
       real(dp), allocatable :: energies(:)
 
       !> lattice vectors if periodic
@@ -262,6 +262,8 @@ contains
     call ommp_init_qm_helper(this%pQmHelper, nAtom, input%coords, initCharges, zVector)
     call ommp_qm_helper_set_attype(this%pQMHelper, input%qmAtomTypes)
     call ommp_qm_helper_init_vdw_prm(this%pQMHelper, input%ParamFileQm)
+
+    ! Allocate internal MM arrays
 
     if (this%pSystem%amoeba) then
       this%pQMHelper%V_pp2n_req = .true.
@@ -650,7 +652,7 @@ contains
 
   !> Run checks to ensure that 
   subroutine ensureOpenmmpolCompatibility(tForces, tMultipole, tExtField, tReks, tElecDyn,&
-      & tLinResp, tPlumed, tSocket, tHelical)
+      & tLinResp, tPlumed, tSocket, tHelical, tDeltaDftb)
     
     !> Does calculation use forces?
     logical :: tForces
@@ -678,6 +680,9 @@ contains
 
     !> Does calculation use herlical boundary conditions?
     logical :: tHelical
+
+    !> Does calculation use delta-DFTB?
+    logical :: tDeltaDftb
     
     if (tForces) then
       call error("Openmmpol forces are not yet implemented.")
@@ -711,15 +716,19 @@ contains
     if (tSocket) then
       call error("Socket communication is not supported by openmmpol.")
     end if
+
+    if (tDeltaDftb) then
+      call error("Delta-DFTB is not supported by openmmpol.")
+    end if
     
   end subroutine ensureOpenmmpolCompatibility
 
 
   !> Get a vector of nuclear charges from a list of atomic symbols
-  subroutine getNuclChargeVector(Zvector, speciesNames, species)
+  subroutine getNuclChargeVector(chargeVector, speciesNames, species)
 
     !> Nuclear charge vector
-    integer, intent(out) :: Zvector(:)
+    integer, intent(out) :: chargeVector(:)
 
     !> Atom type names
     character(len=*), intent(in) :: speciesNames(:)
@@ -734,181 +743,181 @@ contains
       currentSpecies = species(i)
       select case (speciesNames(currentSpecies))
         case ('H')
-          Zvector(i) = 1
+          chargeVector(i) = 1
         case ('He')
-          Zvector(i) = 2
+          chargeVector(i) = 2
         case ('Li')
-          Zvector(i) = 3
+          chargeVector(i) = 3
         case ('Be')
-          Zvector(i) = 4
+          chargeVector(i) = 4
         case ('B')
-          Zvector(i) = 5
+          chargeVector(i) = 5
         case ('C')
-          Zvector(i) = 6
+          chargeVector(i) = 6
         case ('N')
-          Zvector(i) = 7
+          chargeVector(i) = 7
         case ('O')
-          Zvector(i) = 8
+          chargeVector(i) = 8
         case ('F')
-          Zvector(i) = 9
+          chargeVector(i) = 9
         case ('Ne')
-          Zvector(i) = 10
+          chargeVector(i) = 10
         case ('Na')
-          Zvector(i) = 11
+          chargeVector(i) = 11
         case ('Mg')
-          Zvector(i) = 12
+          chargeVector(i) = 12
         case ('Al')
-          Zvector(i) = 13
+          chargeVector(i) = 13
         case ('Si')
-          Zvector(i) = 14
+          chargeVector(i) = 14
         case ('P')
-          Zvector(i) = 15
+          chargeVector(i) = 15
         case ('S')
-          Zvector(i) = 16
+          chargeVector(i) = 16
         case ('Cl')
-          Zvector(i) = 17
+          chargeVector(i) = 17
         case ('Ar')
-          Zvector(i) = 18
+          chargeVector(i) = 18
         case ('K')
-          Zvector(i) = 19
+          chargeVector(i) = 19
         case ('Ca')
-          Zvector(i) = 20
+          chargeVector(i) = 20
         case ('Sc')
-          Zvector(i) = 21
+          chargeVector(i) = 21
         case ('Ti')
-          Zvector(i) = 22
+          chargeVector(i) = 22
         case ('V')
-          Zvector(i) = 23
+          chargeVector(i) = 23
         case ('Cr')
-          Zvector(i) = 24
+          chargeVector(i) = 24
         case ('Mn')
-          Zvector(i) = 25
+          chargeVector(i) = 25
         case ('Fe')
-          Zvector(i) = 26
+          chargeVector(i) = 26
         case ('Co')
-          Zvector(i) = 27
+          chargeVector(i) = 27
         case ('Ni')
-          Zvector(i) = 28
+          chargeVector(i) = 28
         case ('Cu')
-          Zvector(i) = 29
+          chargeVector(i) = 29
         case ('Zn')
-          Zvector(i) = 30
+          chargeVector(i) = 30
         case ('Ga')
-          Zvector(i) = 31
+          chargeVector(i) = 31
         case ('Ge')
-          Zvector(i) = 32
+          chargeVector(i) = 32
         case ('As')
-          Zvector(i) = 33
+          chargeVector(i) = 33
         case ('Se')
-          Zvector(i) = 34
+          chargeVector(i) = 34
         case ('Br')
-          Zvector(i) = 35
+          chargeVector(i) = 35
         case ('Kr')
-          Zvector(i) = 36
+          chargeVector(i) = 36
         case ('Rb')
-          Zvector(i) = 37
+          chargeVector(i) = 37
         case ('Sr')
-          Zvector(i) = 38
+          chargeVector(i) = 38
         case ('Y')
-          Zvector(i) = 39
+          chargeVector(i) = 39
         case ('Zr')
-          Zvector(i) = 40
+          chargeVector(i) = 40
         case ('Nb')
-          Zvector(i) = 41
+          chargeVector(i) = 41
         case ('Mo')
-          Zvector(i) = 42
+          chargeVector(i) = 42
         case ('Tc')
-          Zvector(i) = 43
+          chargeVector(i) = 43
         case ('Ru')
-          Zvector(i) = 44
+          chargeVector(i) = 44
         case ('Rh')
-          Zvector(i) = 45
+          chargeVector(i) = 45
         case ('Pd')
-          Zvector(i) = 46
+          chargeVector(i) = 46
         case ('Ag')
-          Zvector(i) = 47
+          chargeVector(i) = 47
         case ('Cd')
-          Zvector(i) = 48
+          chargeVector(i) = 48
         case ('In')
-          Zvector(i) = 49
+          chargeVector(i) = 49
         case ('Sn')
-          Zvector(i) = 50
+          chargeVector(i) = 50
         case ('Sb')
-          Zvector(i) = 51
+          chargeVector(i) = 51
         case ('Te')
-          Zvector(i) = 52
+          chargeVector(i) = 52
         case ('I')
-          Zvector(i) = 53
+          chargeVector(i) = 53
         case ('Xe')
-          Zvector(i) = 54
+          chargeVector(i) = 54
         case ('Cs')
-          Zvector(i) = 55
+          chargeVector(i) = 55
         case ('Ba')
-          Zvector(i) = 56
+          chargeVector(i) = 56
         case ('La')
-          Zvector(i) = 57
+          chargeVector(i) = 57
         case ('Ce')
-          Zvector(i) = 58
+          chargeVector(i) = 58
         case ('Pr')
-          Zvector(i) = 59
+          chargeVector(i) = 59
         case ('Nd')
-          Zvector(i) = 60
+          chargeVector(i) = 60
         case ('Pm')
-          Zvector(i) = 61
+          chargeVector(i) = 61
         case ('Sm')
-          Zvector(i) = 62
+          chargeVector(i) = 62
         case ('Eu')
-          Zvector(i) = 63
+          chargeVector(i) = 63
         case ('Gd')
-          Zvector(i) = 64
+          chargeVector(i) = 64
         case ('Tb')
-          Zvector(i) = 65
+          chargeVector(i) = 65
         case ('Dy')
-          Zvector(i) = 66
+          chargeVector(i) = 66
         case ('Ho')
-          Zvector(i) = 67
+          chargeVector(i) = 67
         case ('Er')
-          Zvector(i) = 68
+          chargeVector(i) = 68
         case ('Tm')
-          Zvector(i) = 69
+          chargeVector(i) = 69
         case ('Yb')
-          Zvector(i) = 70
+          chargeVector(i) = 70
         case ('Lu')
-          Zvector(i) = 71
+          chargeVector(i) = 71
         case ('Hf')
-          Zvector(i) = 72
+          chargeVector(i) = 72
         case ('Ta')
-          Zvector(i) = 73
+          chargeVector(i) = 73
         case ('W')
-          Zvector(i) = 74
+          chargeVector(i) = 74
         case ('Re')
-          Zvector(i) = 75
+          chargeVector(i) = 75
         case ('Os')
-          Zvector(i) = 76
+          chargeVector(i) = 76
         case ('Ir')
-          Zvector(i) = 77
+          chargeVector(i) = 77
         case ('Pt')
-          Zvector(i) = 78
+          chargeVector(i) = 78
         case ('Au')
-          Zvector(i) = 79
+          chargeVector(i) = 79
         case ('Hg')
-          Zvector(i) = 80
+          chargeVector(i) = 80
         case ('Tl')
-          Zvector(i) = 81
+          chargeVector(i) = 81
         case ('Pb')
-          Zvector(i) = 82
+          chargeVector(i) = 82
         case ('Bi')
-          Zvector(i) = 83
+          chargeVector(i) = 83
         case ('Po')
-          Zvector(i) = 84
+          chargeVector(i) = 84
         case ('At')
-          Zvector(i) = 85
+          chargeVector(i) = 85
         case ('Rn')
-          Zvector(i) = 86
+          chargeVector(i) = 86
         case ('Fr')
-          Zvector(i) = 87
+          chargeVector(i) = 87
         case ('Ra')
-          Zvector(i) = 88
+          chargeVector(i) = 88
         case default
           call error("Unrecognized atom name")
        end select
